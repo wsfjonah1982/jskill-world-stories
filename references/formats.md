@@ -9,9 +9,9 @@ All `out_dir` paths are relative to the world folder. `<Tag>`s are the character
  "idea": "the topic in the user's words",
  "out_dir": "_tasks/2026-10-12_home-neighbourhood",
  "keyframes": [
-   {"id": "K1", "title": "Going down in the lift", "location": "lift", "cast": ["xiaoli", "milky", "butter"],
+   {"id": "K1", "title": "Going down in the lift", "location": "lift", "cast": ["mia", "pepper", "biscuit"],
     "props": [], "camera": "[MS, eye level from outside the open lift, static]",
-    "beat": "Inside the open lift cabin: Butter stands on his hind legs, nose pressed to the blank button panel; the one and only cat, Milky, sits alone in the back corner giving him a slow blink; Xiao Li holds the handrail, laughing."}]}
+    "beat": "Inside the open lift cabin: Biscuit stands on his hind legs, nose pressed to the blank button panel; the one and only cat, Pepper, sits alone in the back corner giving him a slow blink; Mia holds the handrail, laughing."}]}
 ```
 `cast` uses the characters' `key` in world.json (not their kind or tag) and defaults to every character with
 `main` ≠ false. `props` are keys with a picture in `_asset/props/`.
@@ -19,7 +19,7 @@ All `out_dir` paths are relative to the world folder. `<Tag>`s are the character
 ## Scene rules — world.json `scene_rules` + Setting.md `rule:<name>` blocks
 
 ```json
-"scene_rules": [{"rule": "leash", "cast": ["butter"], "scenes": ["corridor", "lift", "park"]}]
+"scene_rules": [{"rule": "leash", "cast": ["biscuit"], "scenes": ["corridor", "lift", "park"]}]
 ```
 When a keyframe, storyboard or video is in one of `scenes` and one of `cast` is on screen, the
 `<!-- prompt:rule:<name> -->` block is pasted after the location block automatically (`keyframes.setting()`).
@@ -44,10 +44,10 @@ Use it for a rule the model keeps breaking in certain places, instead of repeati
 ## Short-footage script — `script/<K>.json`
 
 ```json
-{"title": "Homework at the void deck", "duration": 15,
+{"title": "Homework on the balcony", "duration": 15,
  "recap": "what the first frame (the approved keyframe) shows",
  "shots": [[0, 5, "[MS, slightly high angle, static] <Girl> tugs at her book under <Cat>; <Cat> stays flat on it.",
-            "{Girl (pleading): \"Milky, please move. I have homework.\"} {Cat (calm): \"I am keeping it warm for you.\"}"],
+            "{Girl (pleading): \"Pepper, please move. I have homework.\"} {Cat (calm): \"I am keeping it warm for you.\"}"],
            [5, 10, "…", "…"], [10, 15, "…", "…"]]}
 ```
 Dialogue always follows the speech rules in the world's Identities.md (accent, languages, banned words); the
