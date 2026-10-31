@@ -3,42 +3,52 @@
 One story spec (JSON) drives everything:
   1. grid       one Seedream image: a COLSxROWS storyboard of panels (3x3 = 9 panels by default)
   2. crops      cut the grid into panels (gutters auto-detected)
-  3. keyframes  each segment's first panel redrawn at the world's keyframe size (panel crop + sheets + location)
+  3. keyframes  each segment's first panel redrawn at the world's keyframe size (panel crop + sheets + location +
+                the pictures of the props the segment shows)
   4. page       storyboard.html: grid, keyframes, segment plan, review buttons, the film when present
   5. videos     one Seedance first-frame clip per segment (paid: only after the user approved the storyboard)
   6. stitch     ffmpeg join with the V-6 trim (last 6 frames of each clip, first frame of the next)
+  assets        lists the film's copies of its characters, scene and props (assets/, made by every step: one film
+                is drawn from one version of each; --refresh takes the canon's newer pictures)
 
 Usage:  python storyboard_film.py <story.json> <step> [segment ids...]
-        steps: grid | crops | keyframes | page | videos | stitch | preview (= grid crops keyframes page)
+        steps: grid | crops | keyframes | page | videos | stitch | assets | preview (= grid crops keyframes page)
+        --refresh  copy again the canon pictures that were redrawn since this film copied them
 
 Spec fields: name, title, out_dir (relative to the world folder), grid {cols, rows, size}, segment_seconds (default:
 the world's), location (a Setting.md location key), cast (optional, default the world's main cast), setting_ref
-(optional image, default the location picture), prop_rule (optional, episode-only props), canon_props (optional,
-true = paste the full props block), panels[cols*rows]{seg, beat, fix?}, segments{S1..}{recap, shots[[a, b, action,
+(optional image, default the location picture), props (optional Setting.md prop keys the whole film shows),
+prop_rule (optional, episode-only props), canon_props (optional, true = paste the full props block), panels[cols*rows]{seg, beat, fix?}, segments{S1..}{recap, shots[[a, b, action,
 audio], ...]}, review_notes (optional).
 
 Style, characters, the location and the recurring props are NOT in the spec: they are read from the world's canon
-(Identities.md, Setting.md) on every run, so every film stays consistent.
+(Identities.md, Setting.md) on every run, so every film stays consistent. A recurring prop is found in the panels and
+shots by name (worldlib `props_named`) as well as in `props`: its picture goes to the grid and to the keyframe of every
+segment that shows it, and its own look into the prompts, so it stays the same object in every frame and clip.
 """
 import base64
 import html
 import io
+import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from _world import pagenav, wl  # noqa: E402
-from keyframes import setting  # noqa: E402
+from keyframes import frame_props, props_line, setting  # noqa: E402
 
 # Dependencies each step needs (Dependencies.md); checked before any third-party import so a missing one
 # returns the DEPENDENCY ERROR message instead of a traceback.
 STEP_DEPS = {"grid": ("python", "image", "world"), "crops": ("python",), "keyframes": ("python", "image", "world"),
              "page": ("python",), "videos": ("python", "video", "world"), "stitch": ("python", "ffmpeg"),
-             "preview": ("python", "image", "world")}
+             "preview": ("python", "image", "world"), "assets": ("python",)}
+REFRESH = "--refresh" in sys.argv
 
 import numpy as np  # noqa: E402
 from PIL import Image  # noqa: E402
@@ -128,9 +138,6 @@ class Story:
         self.grid_img = self.odir / "storyboard_grid.jpg"
         self.segs = list(s["segments"])
         self.cast = s.get("cast") or w.default_cast()
-        self.sheets = [str(w.sheet(c)) for c in self.cast]
-        ref = w.p(s["setting_ref"]) if s.get("setting_ref") else w.location_image(s.get("location") or "_")
-        self.setting = [str(ref)] if ref.is_file() else []
         self.neg_img = "no panel numbers, " + w.neg_image
         self.one_each = w.one_each(self.cast)
         # Canonical background info, re-read from Identities.md / Setting.md on every run.
@@ -141,14 +148,89 @@ class Story:
             raise SystemExit(f"spec needs 'location', one of: {', '.join(w.locations())} (Setting.md)")
         self.style = w.get("style")
         self.chars = w.get("characters")
-        # The canon props list names every recurring prop; pasted into every prompt, the model draws them all.
-        # It is used only when the spec sets "canon_props": true; otherwise prop_rule names the episode's props.
-        props = w.get("props") if s.get("canon_props") else w.no_props_rule
-        self.env = " ".join(filter(None, (setting(w, s["location"], self.cast), props, s.get("prop_rule"))))
+        # Recurring props: the spec's own plus every canon prop the panels and shots name, each with its picture.
+        self.props = frame_props(w, s.get("props"), *self.texts(), s.get("prop_rule"))
+        self.env = self.env_for(self.props)
         self.defs = w.get("video-defs") + " " + w.get("voice", "")
         self.vid_rules = w.get("video-rules") + "\n" + w.get("audio")
+        # The film's own copies of the canon pictures it is drawn from (assets/, see asset()); every step uses these.
+        self.adir = self.out / "assets"
+        mf = self.adir / "assets.json"
+        self.manifest, self.changed = (json.loads(mf.read_text(encoding="utf-8")) if mf.is_file() else {}), []
+        self.sheets = [str(self.asset("characters", c, w.sheet(c))) for c in self.cast]
+        ref = w.p(s["setting_ref"]) if s.get("setting_ref") else w.location_image(s["location"])
+        self.setting = [str(self.asset("scenes", "setting_ref" if s.get("setting_ref") else s["location"], ref))] \
+            if ref.is_file() else []
+        self.prop_pics = {k: self.asset("props", k, w.prop_image(k)) for k in self.props}
+        if self.manifest:
+            self.adir.mkdir(parents=True, exist_ok=True)
+            mf.write_text(json.dumps(self.manifest, indent=1, ensure_ascii=False), encoding="utf-8")
+        if self.changed:
+            print("note: redrawn in the canon since this film copied them (the film keeps its copies so its segments "
+                  f"never mix two versions): {'; '.join(self.changed)}. To take the new pictures, run the step again "
+                  "with --refresh, then redraw the grid and keyframes.", flush=True)
+
+    # ---------- assets ----------
+    def asset(self, kind, key, src):
+        """This film's copy of a canon picture: assets/<kind>/<key>.png, made on first use and recorded in
+        assets/assets.json (where it came from, its hash). Once copied it stays, even when the canon picture is redrawn,
+        until --refresh: one film is drawn from one version of each character, scene and prop."""
+        src = Path(src)
+        if not src.is_file():
+            return src
+        dst = self.adir / kind / f"{key}{src.suffix}"
+        name, sha = f"{kind}/{dst.name}", hashlib.sha1(src.read_bytes()).hexdigest()[:12]
+        rec = self.manifest.get(name)
+        if dst.is_file() and rec and rec["sha1"] != sha and not REFRESH:
+            self.changed.append(f"{name} (canon {rec['from']})")
+            return dst
+        if not dst.is_file() or not rec or rec["sha1"] != sha:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            self.manifest[name] = {"from": wl.rel(src, self.w.root), "sha1": sha,
+                                   "copied": datetime.now().isoformat(timespec="seconds")}
+        return dst
+
+    def list_assets(self):
+        for name, rec in sorted(self.manifest.items()):
+            print(f"{name:32} from {rec['from']}  ({rec['copied']})")
+
+    def assets_html(self):
+        """The page section that shows what the film is drawn from."""
+        figs = "".join(f'<figure><img src="{html.escape(wl.rel(self.adir / n, self.out))}" alt="{html.escape(n)}">'
+                       f'<figcaption>{html.escape(n.split("/", 1)[1].rsplit(".", 1)[0].replace("_", " "))} '
+                       f'<small>{html.escape(n.split("/")[0])}</small></figcaption></figure>'
+                       for n in sorted(self.manifest) if (self.adir / n).is_file())
+        return (f'<section><h2>Drawn from <small>this film\'s copies of the characters, scene and props (assets/)</small>'
+                f'</h2><div class="assets">{figs}</div></section>') if figs else ""
 
     # ---------- helpers ----------
+    def texts(self, seg=None):
+        """The words of the film, or of one segment: panel beats and fixes, recaps, shot actions."""
+        s = self.spec
+        out = [p["beat"] + " " + p.get("fix", "") for p in s["panels"] if seg in (None, p["seg"])]
+        for k, d in s["segments"].items():
+            if seg in (None, k):
+                out += [d.get("recap", "")] + [sh[2] for sh in d["shots"]]
+        return out
+
+    def seg_props(self, seg):
+        return frame_props(self.w, self.spec.get("props"), *self.texts(seg))
+
+    def env_for(self, props):
+        """Setting text: the location and its rules, then the props shown (only their own looks: the whole props
+        list pasted into a prompt makes the model draw all of them, so canon_props is opt-in)."""
+        s, w = self.spec, self.w
+        line = w.get("props") if s.get("canon_props") else props_line(w, props)
+        return " ".join(filter(None, (setting(w, s["location"], self.cast), line, s.get("prop_rule"))))
+
+    def ref_items(self, props):
+        return ([{"path": p, "note": f"the character sheet of {self.w.char_label(c)}", "label": self.w.char_label(c),
+                  "pack": True} for c, p in zip(self.cast, self.sheets)]
+                + [{"path": p, "note": "the setting to keep consistent"} for p in self.setting]
+                + [{"path": self.prop_pics[k], "note": f"the {k.replace('_', ' ')} prop: draw exactly this object"}
+                   for k in props])
+
     def run_image(self, refs, prompt_file, out, size):
         with wl.patched_config(wl.image_settings(self.w, size)):
             return self._image(refs, prompt_file, out)
@@ -169,9 +251,8 @@ class Story:
         assert len(s["panels"]) == n, f"need {n} panels, spec has {len(s['panels'])}"
         pos = lambda i: f"row {i // self.cols + 1}, column {i % self.cols + 1}"
         lines = "\n".join(f"Panel {i+1} ({pos(i)}): {p['beat']}" for i, p in enumerate(s["panels"]))
-        ref_note = ("; ".join(f"image {i} is the character sheet of {self.w.char_label(c)}" for i, c in enumerate(self.cast, 1))
-                    + (f"; image {len(self.cast) + 1} shows the setting to keep consistent" if self.setting else "")
-                    + ". Use them for identity only.")
+        refs, notes = wl.fit_refs(self.ref_items(self.props), self.out / "work" / "grid")
+        ref_note = "; ".join(notes) + ". Use them for identity only."
         ref_note = ref_note[0].upper() + ref_note[1:]
         prompt = (f"{self.style}. A single storyboard sheet: a grid of {self.cols} columns by {self.rows} rows = {n} equal "
                   f"{self.w.fmt['ratio']} panels separated by thin white gutters, read left to right, top to bottom. Each panel "
@@ -183,7 +264,7 @@ class Story:
         if self.grid_img.exists():
             print("grid exists")
             return
-        print("grid", self.run_image(self.sheets + self.setting, pf, self.grid_img, s["grid"]["size"]))
+        print("grid", self.run_image(refs, pf, self.grid_img, s["grid"]["size"]))
 
     # ---------- 2. crops ----------
     def crops(self):
@@ -222,17 +303,19 @@ class Story:
                 return seg, "exists"
             i = self.first_panel(seg)
             fix = s["panels"][i].get("fix", "")
+            props = self.seg_props(seg)
+            refs, notes = wl.fit_refs([{"path": self.odir / f"panel_{i+1:02d}.jpg", "note": "the storyboard panel"},
+                                       *self.ref_items(props)], self.out / "work" / seg)
             pf = self.pdir / f"{seg}_keyframe.txt"
             pf.write_text(
                 f"{self.style}. {self.w.ratio_words} composition, full-bleed, no borders.\n"
                 "Image 1 is a small storyboard panel: recreate exactly its composition, camera framing, character poses, "
                 "setting and lighting as one finished full-resolution frame with crisp detail. "
-                + "; ".join(f"image {i} is the character sheet of {self.w.char_label(c)}" for i, c in enumerate(self.cast, 2))
-                + (f"; image {len(self.cast) + 2} shows the setting" if self.setting else "") + ". Use them for identity.\n"
-                f"Scene: {s['panels'][i]['beat']} {fix}\nCharacters: {self.chars}\nSetting: {self.env}\n"
+                + "; ".join(notes[1:]) + ". Use them for identity.\n"
+                f"Scene: {s['panels'][i]['beat']} {fix}\nCharacters: {self.chars}\nSetting: {self.env_for(props)}\n"
                 f"{self.one_each.capitalize()}. no split panels, no grid, no borders, " + self.neg_img + "\n",
                 encoding="utf-8")
-            return seg, self._image([str(self.odir / f"panel_{i+1:02d}.jpg"), *self.sheets, *self.setting], pf, out)
+            return seg, self._image([str(r) for r in refs], pf, out)
 
         with wl.patched_config(wl.image_settings(self.w)):
             with ThreadPoolExecutor(max_workers=6) as ex:
@@ -243,8 +326,15 @@ class Story:
     def write_video_prompts(self):
         s, T = self.spec, self.spec["segment_seconds"]
         for seg, d in s["segments"].items():
+            props = self.seg_props(seg)
+            first = self.spec["panels"][self.first_panel(seg)]
+            late = [p for p in props if p not in self.w.props_named(first["beat"], first.get("fix"), d.get("recap"))]
+            if late:  # the clip's only image is its first frame: what that frame does not hold is drawn from words
+                print(f"note: {seg} shows {', '.join(late)} but its first frame does not; the render draws "
+                      f"{'it' if len(late) == 1 else 'them'} from words only. Put {'it' if len(late) == 1 else 'them'} "
+                      f"in the first panel's beat to hold the look.", flush=True)
             body = (f"{self.style}, {self.w.fmt['ratio']}, {T}s.\n\n@image1 is the first frame of the video: {d['recap']}. "
-                    f"{self.defs}\nSetting: {self.env}\n\n")
+                    f"{self.defs}\nSetting: {self.env_for(props)}\n\n")
             for i, (a, b, act, audio) in enumerate(d["shots"], 1):
                 lines = dialogue_only(audio)
                 body += f"Shot {i} ({a}–{b}s): {act}\n" + (f"{lines}\n\n" if lines else "\n")
@@ -329,13 +419,13 @@ main{{max-width:1200px;margin:0 auto;padding:24px 16px 64px}}h1{{margin:0 0 4px;
 section{{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:0 0 18px}}h2{{margin:0 0 10px;font-size:18px}}
 h2 small{{color:var(--muted);font-weight:400;margin-left:6px}}.row{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}}
 figure{{margin:0}}img,video{{width:100%;border-radius:8px;display:block}}img{{cursor:zoom-in}}video{{background:#000}}
-figcaption{{font-size:13px;margin-top:6px}}.kf figcaption b{{color:var(--accent)}}.shots{{margin:12px 0 0;padding-left:18px;font-size:14px}}
+figcaption{{font-size:13px;margin-top:6px}}.assets{{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px}}.assets img{{background:#fff;object-fit:contain;aspect-ratio:4/3}}.assets small{{color:var(--muted)}}.kf figcaption b{{color:var(--accent)}}.shots{{margin:12px 0 0;padding-left:18px;font-size:14px}}
 .au{{color:var(--muted)}}textarea{{width:100%;margin-top:10px;min-height:42px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);padding:8px;font:inherit}}
 dialog{{border:0;padding:0;background:transparent;max-width:96vw}}dialog img{{max-height:90vh;width:auto;max-width:96vw;cursor:zoom-out}}dialog::backdrop{{background:rgba(0,0,0,.8)}}
 </style></head><body><main><h1>{e(s['title'])}</h1>
 <p class="sub">{e(self.w.name)} · {self.cols}×{self.rows} storyboard ({self.cols*self.rows} panels) · {len(self.segs)} segments × {T}s · each segment's first frame is redrawn at full resolution from its first panel. Click any image to enlarge.</p>
 {film_html}__DECIDE__<section><h2>{self.cols}×{self.rows} storyboard <small>one Seedream image</small></h2><img src="{self.data_uri(self.grid_img, 2400)}" alt="storyboard grid"></section>
-{notes_html}{segs}</main><dialog id="z"><img id="zi" alt=""></dialog><script>
+{self.assets_html()}{notes_html}{segs}</main><dialog id="z"><img id="zi" alt=""></dialog><script>
 const z=document.getElementById('z'),zi=document.getElementById('zi');
 document.querySelectorAll('main img').forEach(i=>i.onclick=()=>{{zi.src=i.src;z.showModal()}});z.onclick=()=>z.close();
 </script>__FEEDBACK__</body></html>"""
@@ -352,10 +442,10 @@ if __name__ == "__main__":
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     st = Story(sys.argv[1])
-    step, ids = sys.argv[2], sys.argv[3:]
+    step, ids = sys.argv[2], [a for a in sys.argv[3:] if a != "--refresh"]
     wl.require(STEP_DEPS.get(step, wl.GROUPS), st.w)
     if step == "preview":
         st.grid(); st.crops(); st.keyframes(ids); st.page()
     else:
         {"grid": st.grid, "crops": st.crops, "keyframes": lambda: st.keyframes(ids), "page": st.page,
-         "videos": lambda: st.videos(ids), "stitch": st.stitch}[step]()
+         "videos": lambda: st.videos(ids), "stitch": st.stitch, "assets": st.list_assets}[step]()

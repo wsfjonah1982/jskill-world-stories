@@ -14,7 +14,9 @@ All `out_dir` paths are relative to the world folder. `<Tag>`s are the character
     "beat": "Inside the open lift cabin: Biscuit stands on his hind legs, nose pressed to the blank button panel; the one and only cat, Pepper, sits alone in the back corner giving him a slow blink; Mia holds the handrail, laughing."}]}
 ```
 `cast` uses the characters' `key` in world.json (not their kind or tag) and defaults to every character with
-`main` ≠ false. `props` are keys with a picture in `_asset/props/`.
+`main` ≠ false. `props` are keys with a picture in `_asset/props/`; a canon prop the beat (or a short script's
+shots) names is added automatically (worldlib `props_named`: the key, the Recurring props table name, world.json
+`prop_names`). Each shown prop is passed as a picture and described by its own look, never the whole props list.
 
 ## Scene rules — world.json `scene_rules` + Setting.md `rule:<name>` blocks
 
@@ -70,6 +72,11 @@ of the audio cue reach the prompt. Never use `--` (it truncates the prompt).
 - 1 minute = 3 segments × 20s (9 panels, 3 per segment); 2 minutes = 6 segments (use a 3×6 or two grids' worth of
   panels: `grid` rows/cols must multiply to the panel count).
 - `setting_ref` (optional) replaces the location picture as the setting reference, e.g. the approved keyframe.
+- `props` (optional) lists prop keys the whole film shows; props named in panels, recaps or shots are added. Each
+  segment's keyframe and video prompt get only the props that segment names.
+- `assets/` is made by every step: the film's copies of its character sheets, scene and prop pictures, with
+  `assets/assets.json` ({"props/owl.png": {"from", "sha1", "copied"}}). The film keeps them when the canon is
+  redrawn; `storyboard_film.py <spec> assets` lists them, `--refresh` takes the canon's newer pictures.
 - To start S1 from the approved keyframe itself, copy `output/<K>.jpg` to `long_<K>/output/S1_keyframe.jpg` before
   `preview` (an existing keyframe is kept).
 

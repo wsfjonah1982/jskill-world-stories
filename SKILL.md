@@ -42,7 +42,8 @@ the user marked it Generate / approved the storyboard.**
 - Folder `_tasks/<YYYY-MM-DD>_<slug>/`. Write `idea.json` (format in `references/formats.md`): `title`, the topic in
   the user's words, and the keyframes: by default **5 different takes** on the topic (different moments, locations or
   camera angles) unless the user asks for another number (e.g. 10 ideas, one keyframe each).
-- Each design: `location` (a key in Setting.md), `cast` (character keys), optional `props` (keys with pictures),
+- Each design: `location` (a key in Setting.md), `cast` (character keys), optional `props` (prop keys; any canon prop the beat names is
+  added by name, and every prop shown must have its picture, or the render stops and says so),
   `camera` (`[shot size, angle, movement]`), `beat` (what happens, concrete and visual, one moment). Write beats that
   play to the characters' personalities and the world's humour; respect the world's rules.
 
@@ -80,12 +81,18 @@ the user marked it Generate / approved the storyboard.**
   `prop_rule` (describe them once, identically).
 - `python scripts/storyboard_film.py long_<K>/story.json preview` draws the storyboard as **one image** (so set,
   props and light agree across the film), crops the panels, redraws each segment's first panel as its keyframe, and
-  writes `storyboard.html`. Fix a panel by adding `fix` to it and re-running `keyframes S2` (delete the old keyframe).
+  writes `storyboard.html`. **The film copies what it is drawn from** into `long_<K>/assets/` (character sheets, the
+  scene, the pictures of every recurring prop the panels or shots name) and every step uses those copies, so one film
+  never mixes two versions of a picture; the page shows them under **Drawn from**. A canon picture redrawn later is
+  reported, not taken: `--refresh` takes it (then redraw the grid and keyframes). Put a prop that a segment shows into
+  that segment's first panel beat: the video's only image is its first frame (`videos` warns when it is not). Fix a panel by adding `fix` to it and re-running `keyframes S2` (delete the old keyframe).
 - After approval (storyboard page **Copy feedback** with `"decision": "approve"`): `videos`, then `stitch`
   (ffmpeg, trims the joins), then `page` → the film is on `storyboard.html`. Rebuild the overview.
 
 ### After each session
 Update the world's `world.md`: what was made (paths), what the user decided, known issues, pending tasks.
+Record what the story taught in the world's journal and, at the end of the task, the bundle (`Learning.md`,
+Part 1): every revision, every render that drifted (paid ones first), every fix that did not take.
 
 ## Rules
 - One location per keyframe and per long take; a scene elsewhere is another keyframe/clip.

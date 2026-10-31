@@ -111,9 +111,19 @@ const longReady = d => d.long && d.long.topic && d.long.topic.trim();
 /* ---------- short footage: script and prompt (same build as short_footage.py) ---------- */
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const dialogueOnly = audio => (String(audio || '').match(/\{[^}]*\}/g) || []).join(' ');
+// The props a clip shows: the keyframe's own plus every canon prop the words name (worldlib props_named).
+const reEsc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const stem = t => t.endsWith('s') && !t.endsWith('ss') ? t.slice(0, -1) : t;
+function propsLine(k, sc) {
+  const text = [k.beat, sc.recap, ...sc.shots.map(s => s[2])].join(' ').toLowerCase();
+  const keys = Object.keys(D.props).filter(p => (k.props || []).includes(p) ||
+    D.props[p].terms.some(t => new RegExp(`\\b${reEsc(stem(t))}(e?s)?\\b`).test(text)));
+  return keys.length ? 'Props, each exactly as its reference picture, same shape, colours and size, never redesigned: ' +
+    keys.map(p => D.props[p].look).join('; ') + '. No other recurring props.' : D.canon.noprops;
+}
 function buildPrompt(k, sc) {
   let body = `${D.canon.style}, ${D.format.ratio}, ${sc.duration}s.\n\n@image1 is the first frame of the video: ${sc.recap}. ` +
-             `${D.canon.defs}\nSetting: ${k.setting}\n\n`;
+             `${D.canon.defs}\nSetting: ${k.setting}\n${propsLine(k, sc)}\n\n`;
   sc.shots.forEach(([a, b, act, au], i) => {
     const lines = dialogueOnly(au);
     body += `Shot ${i + 1} (${a}–${b}s): ${act}\n` + (lines ? `${lines}\n\n` : '\n');

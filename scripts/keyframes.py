@@ -35,11 +35,36 @@ def setting(w, location, cast):
     return " ".join([w.get("location:" + location)] + rules)
 
 
+def frame_props(w, listed, *texts):
+    """The recurring props a frame or a clip shows: the ones it lists plus every canon prop its words name
+    (worldlib `props_named`). A prop drawn from words alone is re-invented on every roll, so each must have its picture."""
+    keys = list(dict.fromkeys([*(listed or []), *w.props_named(*texts)]))
+    unknown = [p for p in keys if p not in w.props()]
+    missing = [p for p in keys if p not in unknown and not w.prop_image(p).is_file()]
+    if unknown or missing:
+        sys.exit((f"unknown prop(s) {', '.join(unknown)} (Setting.md has: {', '.join(w.props()) or 'none'}). " if unknown else "")
+                 + (f"no picture yet for {', '.join(missing)}: run my-world `world_images.py prop <key>` first." if missing else ""))
+    return sorted(keys, key=w.props().index)  # canon order, as keyframes_page.html builds it
+
+
+def props_line(w, keys):
+    """The props text of a prompt: each shown prop's own look (never the whole props list, which draws them all)."""
+    if not keys:
+        return w.no_props_rule
+    return ("Props, each exactly as its reference picture, same shape, colours and size, never redesigned: "
+            + "; ".join(w.prop_look(p) for p in keys) + ". No other recurring props.")
+
+
+def short_props(w, k, sc):
+    return frame_props(w, k.get("props"), k["beat"], sc.get("recap"), *(s[2] for s in sc["shots"]))
+
+
 def short_prompt(w, k, sc):
     """The short-footage video prompt (keyframes_page.html rebuilds it the same way in the browser)."""
     cast = k.get("cast") or w.default_cast()
     body = (f"{w.get('style')}, {w.fmt['ratio']}, {sc['duration']}s.\n\n@image1 is the first frame of the video: "
-            f"{sc['recap']}. {w.get('video-defs')} {w.get('voice', '')}\nSetting: {setting(w, k['location'], cast)}\n\n")
+            f"{sc['recap']}. {w.get('video-defs')} {w.get('voice', '')}\nSetting: {setting(w, k['location'], cast)}\n"
+            f"{props_line(w, short_props(w, k, sc))}\n\n")
     for i, (a, b, act, audio) in enumerate(sc["shots"], 1):
         lines = dialogue_only(audio)
         body += f"Shot {i} ({a}–{b}s): {act}\n" + (f"{lines}\n\n" if lines else "\n")
@@ -73,22 +98,21 @@ class Idea:
 
     def refs_and_prompt(self, k):
         w, cast = self.w, self.cast(k)
-        refs, notes = [], []
-        for c in cast:
-            refs.append(w.sheet(c))
-            notes.append(f"image {len(refs)} is the character sheet of {w.char_label(c)}")
+        props = frame_props(w, k.get("props"), k["beat"], k.get("camera"))
+        items = [{"path": w.sheet(c), "note": f"the character sheet of {w.char_label(c)}", "label": w.char_label(c),
+                  "pack": True} for c in cast]
         loc_img = w.location_image(k["location"])
         if loc_img.exists():
-            refs.append(loc_img)
-            notes.append(f"image {len(refs)} is the location: keep its room, furniture, colours and light exactly")
+            items.append({"path": loc_img, "note": "the location: keep its room, furniture, colours and light exactly"})
         if len(cast) > 1 and w.height_chart():
-            refs.append(w.height_chart())
-            notes.append(f"image {len(refs)} is the height chart: copy its true relative sizes")
-        for p in k.get("props", []):
-            refs.append(w.prop_image(p))
-            notes.append(f"image {len(refs)} shows a prop ({p.replace('_', ' ')}): keep its exact look")
-        # The canon props list names every prop; pasted into every prompt, the model draws them all.
-        props = f"Props: {w.get('props')}\n" if k.get("props") and "props" in w.blocks() else w.no_props_rule + "\n"
+            items.append({"path": w.height_chart(), "note": "the height chart: copy its true relative sizes"})
+        items += [{"path": w.prop_image(p), "note": f"the {p.replace('_', ' ')} prop: draw exactly this object"}
+                  for p in props]
+        if any(not Path(i["path"]).exists() for i in items):  # render() reports what is missing
+            refs, notes = [i["path"] for i in items], [f"image {n} is {i['note']}" for n, i in enumerate(items, 1)]
+        else:  # over the model's reference limits the sheets share one contact sheet
+            refs, notes = wl.fit_refs(items, self.out / "work" / k["id"])
+        props = props_line(w, props) + "\n"
         prompt = (f"{w.get('style')}. {w.ratio_words} keyframe for an animated short film, full-bleed.\n"
                   f"References: {'; '.join(notes)}.\n"
                   f"Camera: {k.get('camera', '[MS, eye level, static]')}\n"
@@ -138,14 +162,16 @@ class Idea:
             kfs.append({"id": k["id"], "title": k["title"], "location": k["location"], "camera": k.get("camera", ""),
                         "beat": k["beat"], "cast": ", ".join(w.char_name(c) for c in self.cast(k)),
                         "img": wl.rel(img, self.out) if img.exists() else "", "links": links,
-                        "setting": setting(w, k["location"], self.cast(k)), "short": self.short_data(k["id"])})
+                        "setting": setting(w, k["location"], self.cast(k)), "props": k.get("props", []),
+                        "short": self.short_data(k["id"])})
         ap = self.out / "approval.json"
         data = {"title": self.spec["title"], "idea": self.spec["idea"], "out_dir": self.spec["out_dir"], "keyframes": kfs,
                 "world": w.name, "names": [c["name"] for c in w.chars.values()],
                 "format": {"ratio": w.fmt["ratio"], "min": w.fmt["short_min"], "max": w.fmt["short_max"],
                            "options": w.fmt["short_options"], "segment": w.fmt["segment_seconds"]},
                 "canon": {"style": w.get("style"), "defs": w.get("video-defs") + " " + w.get("voice", ""),
-                          "rules": video_rules(w)},
+                          "rules": video_rules(w), "noprops": w.no_props_rule},
+                "props": {p: {"terms": w.prop_terms(p), "look": w.prop_look(p)} for p in w.props()},
                 "approval": json.loads(ap.read_text(encoding="utf-8")) if ap.is_file() else None}
         page = (PAGE_TEMPLATE.read_text(encoding="utf-8")
                 .replace("__TITLE__", html.escape(self.spec["title"]))
