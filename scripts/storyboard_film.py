@@ -547,7 +547,10 @@ class Story:
         d, texts = self.spec["segments"][seg], self.texts(seg)
         cast = self.cast_named(" ".join(texts + [sh[3] or "" for sh in d["shots"]]))
         close = any(self.is_close(sh[2]) for sh in d["shots"])
-        items = self.ref_items(self.seg_props(seg), None if close else False, cast)
+        # Only the props this segment's own words name: a prop picture sent to a segment that never shows the prop is
+        # drawn somewhere anyway (a desk toy came back beside the cat on the stairs).
+        named = [p for p in self.seg_props(seg) if p in self.w.props_named(*texts)]
+        items = self.ref_items(named, None if close else False, cast)
         items = [i for i in items if Path(i["path"]).is_file()][:MAX_REF_IMAGES - 1]
         images = [i["path"] for i in items]
         notes = [f"@image{n} is {i['note'].replace('copy its look exactly, not its size (the picture is a close-up); draw it at the size the scene gives', 'copy only its look; it keeps the small size and place it has in @image1')}"

@@ -45,7 +45,7 @@ bug. **Status:** `adopted` (name the file), `candidate` (waiting for more eviden
 |---|---|---|---|---|
 | 2026-10-30 | [long take, 1 min, 3 segments](2026-10-30_long-take.md) | flat matte 3D, dark | 9 | 1 |
 | 2026-10-31 | [props not matching their pictures](2026-10-31_props-consistency.md) | 3D cartoon | 6 | 6 |
-| 2026-11-01 | [long take at one desk, continuity and close shots](2026-11-01_long-take-continuity.md) | 3D cartoon | 22 | 14 |
+| 2026-11-01 | [long take at one desk, continuity and close shots](2026-11-01_long-take-continuity.md) | 3D cartoon | 23 | 15 |
 
 ## Trends
 
@@ -56,7 +56,7 @@ more worlds pointing the same way is ready to review for promotion.
 |---|---|---|---|
 | storyboard (what reaches the grid) | 2026-10-30 #1 | 1 | candidate |
 | story-consistency (a story's lines agree) | 2026-10-30 #2 | 1 | candidate |
-| frame-refs (a frame declares its assets; check before paying) | 2026-10-30 #3 #4 #5; 2026-10-31 #4; 2026-11-01 #1 #2 | 2 | warning for props adopted; characters invented after the first frame now in 2 worlds (paid both times): per-panel `refs` and the refusal ready to review; SKILL.md names the workaround |
+| frame-refs (a frame declares its assets; check before paying) | 2026-10-30 #3 #4 #5; 2026-10-31 #4; 2026-11-01 #1 #2 #23 | 2 | warning for props adopted; characters invented after the first frame now in 2 worlds (paid both times): per-panel `refs` and the refusal ready to review; SKILL.md names the workaround |
 | checks (how the word check reads) | 2026-10-30 #6 #7; 2026-11-01 #16 | 2 | candidate (different points: no shared fix yet) |
 | episode-props (props keep their designed look) | 2026-10-30 #8 #9; 2026-10-31 #1 #2 #3; 2026-11-01 #13 | 2 | canon props adopted (2 worlds); one-off episode props (#8) candidate |
 | prop-size (props drawn at their reference picture's scale) | 2026-10-31 #6; 2026-11-01 #14 | 1 | adopted: prompt wording, then my-world `place_prop.py` (model limit) |

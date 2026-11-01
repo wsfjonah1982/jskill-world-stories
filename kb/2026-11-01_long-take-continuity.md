@@ -37,6 +37,7 @@ revision rounds (wrong framing in close panels, invented furniture, pets added, 
 | 20 | review-page | The user asked to see the full prompt each clip will submit, read-only, before rendering. Showing it with the list of pictures and voices sent (and the mode) made the gap in #17 visible: before, a video saw no sheet, prop or voice. | user request | adopted: **Video prompt** popup per segment, rebuilt by `page` |
 | 21 | canon-in-prompts | The world's style block says "soft warm daylight" and is pasted into every prompt, night scenes included; the night set and first frame kept the renders at night, but the words contradict them. | agent observation | candidate (the style block should not carry the light; the user did not ask to change it) |
 | 22 | continuity | A segment started from the previous clip's last frame (#9) depends on that clip: when the previous segment is re-rendered, the next one opens on the old ending (here the dog lay elsewhere) and must be `continue`d and rendered again. | agent observation | candidate (`continue` could warn when the previous clip is newer than the keyframe) |
+| 23 | frame-refs | In All-Reference mode a prop picture sent to a segment whose words never show that prop is drawn anyway, in the wrong place: a desk toy appeared beside the cat on the stairs (paid). Each segment's video gets only the props its own panels, recap and shots name. | agent observation | adopted: `video_refs` |
 
 ## Not here
 - The night set, the lamp-light colour rule, the small animal's size and the small-props cut-out are world lessons:
