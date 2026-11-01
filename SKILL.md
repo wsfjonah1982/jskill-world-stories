@@ -83,11 +83,21 @@ the user marked it Generate / approved the storyboard.**
   props and light agree across the film), crops the panels, redraws each segment's first panel as its keyframe, and
   writes `storyboard.html`. **The film copies what it is drawn from** into `long_<K>/assets/` (character sheets, the
   scene, the pictures of every recurring prop the panels or shots name) and every step uses those copies, so one film
-  never mixes two versions of a picture; the page shows them under **Drawn from**. A canon picture redrawn later is
+  never mixes two versions of a picture; the page shows them under **Assets**, with the cast's voices to play and the
+  last frame of each rendered segment. A canon picture redrawn later is
   reported, not taken: `--refresh` takes it (then redraw the grid and keyframes). Put a prop that a segment shows into
-  that segment's first panel beat: the video's only image is its first frame (`videos` warns when it is not). Fix a panel by adding `fix` to it and re-running `keyframes S2` (delete the old keyframe).
-- After approval (storyboard page **Copy feedback** with `"decision": "approve"`): `videos`, then `stitch`
-  (ffmpeg, trims the joins), then `page` → the film is on `storyboard.html`. Rebuild the overview.
+  that segment's first panel beat: the video's only image is its first frame (`videos` warns when it is not). A
+  character a segment brings in after its first frame is invented from words: put them in that frame, or describe
+  them in full in the shot ("the one and only cat, <look>; exactly one cat and one dog"). Fix a panel by adding `fix` to it and re-running `keyframes S2` (delete the old keyframe).
+- After approval (storyboard page **Copy feedback** with `"decision": "approve"`): `videos` (each segment sees
+  its first frame as @image1 plus the sheets of the cast it names, the scene, the props it shows and the voices of
+  who speaks: Seedance All-Reference mode, since it refuses a first frame mixed with references), then `stitch`
+  (ffmpeg, trims the joins), then `page` → the film is on `storyboard.html`, and each segment's clip in its own section (earlier renders
+  kept in `output/render_N/` are linked there). Each segment's **Video prompt** button shows, read-only, the full prompt the next render
+  submits and every picture and voice sent with it. Rebuild the overview.
+- A segment re-rendered after the one before it is final can start from that clip's last frame (`continue S2`,
+  free, then the paid segment): the cut becomes seamless. Small props drawn too big in a set or a frame are placed
+  after drawing with my-world `place_prop.py`; an edit will not shrink them.
 
 ### After each session
 Update the world's `world.md`: what was made (paths), what the user decided, known issues, pending tasks.

@@ -19,20 +19,21 @@ to stories.
 
 | What | Where (inside `_world/`) |
 |---|---|
-| One record per turn that taught something | `_reference/journal/journal.jsonl`, with `"skill": "world-stories"` |
+| One record per turn that taught something | `_reference/journal/journal.jsonl`, written by my-world `journal.py add` (`--asset` names the story file) |
 | What this story decided, its known issues | the task folder (`_tasks/<date>_<slug>/`) and `world.md` (session log) |
 | The exported bundle | `_reference/learning/<YYYY-MM-DD>_<task>.zip` (one per task, shared with my-world) |
 
 ### What to record
 
-Write a journal record (format in my-world's `Learning.md`) whenever one of these happens:
+Write a journal record (my-world `journal.py add`, see its `references/journal.md`) with a `--lesson` whenever one of
+these happens:
 - **The user revises a keyframe, script or storyboard,** with the pasted feedback note as `said`.
 - **A render came back wrong:** which segment, what drifted (a character invented, a prop changed, the language
   switched), and whether it was paid for. Paid failures matter most. Record the cost: "one segment re-rendered".
 - **A fix did not take:** the words were changed but the picture stayed (a `fix` that never reached the grid).
 - **A check missed something, or flagged something that was fine.**
 - **The cause was in the world, not the story:** a character or object without a picture, a canon block too vague.
-  Mark it `"skill": "my-world"`: it is the world that needs changing.
+  Say so in the `--lesson` and name the canon key in `--canon`: it is the world that needs changing.
 
 ### What the bundle adds for stories
 

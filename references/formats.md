@@ -63,7 +63,7 @@ of the audio cue reach the prompt. Never use `--` (it truncates the prompt).
  "keyframe": "K4", "topic": "the user's brief",
  "out_dir": "_tasks/2026-10-12_home-neighbourhood/long_K4",
  "grid": {"cols": 3, "rows": 3, "size": "2560x1440"}, "segment_seconds": 20,
- "location": "living_room", "setting_ref": "_tasks/2026-10-12_home-neighbourhood/output/K4.jpg",
+ "location": "living_room",
  "prop_rule": "Episode props: … described once, identically. It stays the same in every panel.",
  "panels": [{"seg": "S1", "beat": "…"}, … 9 panels, 3 per segment …],
  "segments": {"S1": {"recap": "what S1's first frame shows", "shots": [[0, 6, "…", "{…}"], …]}, "S2": {…}, "S3": {…}},
@@ -71,12 +71,28 @@ of the audio cue reach the prompt. Never use `--` (it truncates the prompt).
 ```
 - 1 minute = 3 segments × 20s (9 panels, 3 per segment); 2 minutes = 6 segments (use a 3×6 or two grids' worth of
   panels: `grid` rows/cols must multiply to the panel count).
-- `setting_ref` (optional) replaces the location picture as the setting reference, e.g. the approved keyframe.
+- `setting_ref` (optional) replaces the location picture as the setting reference. Use an empty set, never a
+  keyframe that holds the cast: its characters and framing leak into every frame (start S1 from the keyframe instead,
+  below).
+- `storyboard_film.py <spec> panels 2 3` redraws single panels as finished frames and puts them back into the sheet
+  (no new sheet): a wide panel is drawn against the opening frame and the set, a close one is built on the
+  `close_scene` picture as its base. A panel's `fix` steers this redraw too.
+- `close_scene` (optional) is a Setting.md scene key with a close view of the same place (e.g. the desk of a room):
+  it is copied into `assets/` (shown under **Assets**), passed to the grid with the set, and used instead of the
+  set for a first frame whose panel is a close shot (close-up, MCU, CU, close view, over the shoulder).
 - `props` (optional) lists prop keys the whole film shows; props named in panels, recaps or shots are added. Each
   segment's keyframe and video prompt get only the props that segment names.
-- `assets/` is made by every step: the film's copies of its character sheets, scene and prop pictures, with
+- `assets/` is made by every step: the film's copies of its character sheets, scene and prop pictures, the cast's
+  voices (`voices/<char>.wav`, for listening on the page; the video model does not take them), its opening frame
+  (`frames/S1_first_frame.jpg`, which every later first frame is drawn against) and, from `page`, the last frame of
+  each rendered segment (`frames/S2_last_frame.jpg`, taken again when the clip is re-rendered), with
   `assets/assets.json` ({"props/owl.png": {"from", "sha1", "copied"}}). The film keeps them when the canon is
   redrawn; `storyboard_film.py <spec> assets` lists them, `--refresh` takes the canon's newer pictures.
+- `storyboard_film.py <spec> continue S2` (after S1 is rendered) makes S2 start where S1 ends: the last frame of
+  `output/S1.mp4` becomes `S2_keyframe.jpg` and S2's first panel (the old keyframe goes to `output/v1/`). The frame is
+  cleaned once by the image model, keeping it exactly: a raw upscaled video frame was refused by the video model as
+  "may contain real person". Write that panel's beat as "the last frame of S1, exactly: …", draw the segment's other
+  panels with `panels N` as "same camera as panel N", rewrite the recap, then render that segment again.
 - To start S1 from the approved keyframe itself, copy `output/<K>.jpg` to `long_<K>/output/S1_keyframe.jpg` before
   `preview` (an existing keyframe is kept).
 

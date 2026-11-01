@@ -106,7 +106,7 @@ class Idea:
             items.append({"path": loc_img, "note": "the location: keep its room, furniture, colours and light exactly"})
         if len(cast) > 1 and w.height_chart():
             items.append({"path": w.height_chart(), "note": "the height chart: copy its true relative sizes"})
-        items += [{"path": w.prop_image(p), "note": f"the {p.replace('_', ' ')} prop: draw exactly this object"}
+        items += [{"path": w.prop_image(p), "note": f"the {p.replace('_', ' ')} prop: copy its look exactly, not its size (the picture is a close-up); draw it at the size the scene gives"}
                   for p in props]
         if any(not Path(i["path"]).exists() for i in items):  # render() reports what is missing
             refs, notes = [i["path"] for i in items], [f"image {n} is {i['note']}" for n, i in enumerate(items, 1)]
